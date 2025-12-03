@@ -8,11 +8,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0-preview.5.25277.114" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0-preview.5.25277.114" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0-preview.5" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\OpenCode.Extensions.Data\OpenCode.Extensions.Data.csproj" />
+    <ProjectReference Include="..\..\..\Data\src\Data.Cqrs.EntityFrameworkCore\Data.Cqrs.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
 </Project>
