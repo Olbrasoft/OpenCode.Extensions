@@ -28,8 +28,9 @@ public class GetCurrentDateTimeQueryHandler : IQueryHandler<GetCurrentDateTimeQu
         token.ThrowIfCancellationRequested();
 
         // Execute raw SQL query to get current timestamp from PostgreSQL
+        // Note: SqlQueryRaw<T> expects a column named "Value" for scalar types
         var result = await _context.Database
-            .SqlQueryRaw<DateTime>("SELECT NOW()")
+            .SqlQueryRaw<DateTime>("SELECT NOW() AS \"Value\"")
             .FirstAsync(token);
 
         return result;
