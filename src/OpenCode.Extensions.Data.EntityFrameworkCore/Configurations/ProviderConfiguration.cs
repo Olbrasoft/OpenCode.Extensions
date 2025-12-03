@@ -25,11 +25,12 @@ public class ProviderConfiguration : IEntityTypeConfiguration<Provider>
             new Provider { Id = 1, Name = "Keyboard", Description = "Direct typing to terminal" },
             new Provider { Id = 2, Name = "VoiceAssistant", Description = "ContinuousListener - voice input" },
             new Provider { Id = 3, Name = "HumanCombination", Description = "Combination of keyboard and voice" },
-            new Provider { Id = 4, Name = "Anthropic", Description = "Direct Anthropic API" },
-            new Provider { Id = 5, Name = "OpenAI", Description = "Direct OpenAI API" },
-            new Provider { Id = 6, Name = "GitHubCopilot", Description = "GitHub Copilot" },
-            new Provider { Id = 7, Name = "GoogleAI", Description = "Google AI Studio / Vertex AI" },
-            new Provider { Id = 8, Name = "AzureOpenAI", Description = "Azure OpenAI Service" }
+            new Provider { Id = 4, Name = "Anthropic", Description = "Claude models via Anthropic API" },
+            new Provider { Id = 5, Name = "OpenAI", Description = "GPT models via OpenAI API" },
+            new Provider { Id = 6, Name = "GitHubCopilot", Description = "GitHub Copilot (routes to various models)" },
+            new Provider { Id = 7, Name = "Google", Description = "Gemini models via Google AI" },
+            new Provider { Id = 8, Name = "AzureOpenAI", Description = "Azure OpenAI Service" },
+            new Provider { Id = 9, Name = "xAI", Description = "Grok models via xAI" }
         );
     }
 }

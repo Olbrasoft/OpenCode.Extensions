@@ -17,6 +17,9 @@ public class OpenCodeDbContext : DbContext
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<Participant> Participants => Set<Participant>();
     public DbSet<Provider> Providers => Set<Provider>();
+    public DbSet<ModeEntity> Modes => Set<ModeEntity>();
+    public DbSet<RoleEntity> Roles => Set<RoleEntity>();
+    public DbSet<Model> Models => Set<Model>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
