@@ -41,6 +41,13 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
             .IsUnique()
             .HasDatabaseName("IX_Messages_SessionId_RootMessage");
 
+        // Each parent message can have only ONE child message per session (linear conversation chain)
+        // This prevents duplicate responses to the same message
+        builder.HasIndex(m => new { m.SessionId, m.ParentMessageId })
+            .HasFilter("\"ParentMessageId\" IS NOT NULL")
+            .IsUnique()
+            .HasDatabaseName("IX_Messages_SessionId_ParentMessageId_Unique");
+
         // Role - enum stored as int (no FK, just conversion)
         builder.Property(m => m.Role)
             .HasConversion<int>();

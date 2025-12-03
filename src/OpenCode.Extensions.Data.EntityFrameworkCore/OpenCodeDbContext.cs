@@ -19,6 +19,7 @@ public class OpenCodeDbContext : DbContext
     public DbSet<ParticipantTypeEntity> ParticipantTypes => Set<ParticipantTypeEntity>();
     public DbSet<Provider> Providers => Set<Provider>();
     public DbSet<ModeEntity> Modes => Set<ModeEntity>();
+    public DbSet<ErrorLog> ErrorLogs => Set<ErrorLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

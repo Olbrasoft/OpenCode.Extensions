@@ -2,8 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using Olbrasoft.Mediation;
 using Olbrasoft.OpenCode.Extensions.Data.Commands;
 using Olbrasoft.OpenCode.Extensions.Data.EntityFrameworkCore;
+using Olbrasoft.OpenCode.Extensions.Data.Entities;
 using Olbrasoft.OpenCode.Extensions.Data.Enums;
 using OpenCode.Extensions.Services;
+using System.ComponentModel.DataAnnotations;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -63,10 +65,18 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = Dat
     .WithName("HealthCheck");
 
 // Create message
-app.MapPost("/api/messages", async (CreateMessageRequest request, IMediator mediator, CancellationToken cancellationToken) =>
+app.MapPost("/api/messages", async (CreateMessageRequest request, IMediator mediator, OpenCodeDbContext dbContext, CancellationToken cancellationToken) =>
 {
     try
     {
+        // Validate Content is not null or empty
+        if (string.IsNullOrWhiteSpace(request.Content))
+        {
+            var errorText = $"Validation failed: Content is required and cannot be empty. Request: MessageId={request.MessageId}, SessionId={request.SessionId}";
+            await LogErrorAsync(dbContext, errorText, cancellationToken);
+            return Results.BadRequest(new { error = "Content is required and cannot be empty." });
+        }
+
         var command = new CreateMessageCommand
         {
             MessageId = request.MessageId,
@@ -87,12 +97,32 @@ app.MapPost("/api/messages", async (CreateMessageRequest request, IMediator medi
 
         return Results.Ok(new { id, messageId = request.MessageId });
     }
-    catch (InvalidOperationException ex)
+    catch (Exception ex)
     {
+        var errorText = $"Exception in CreateMessage: {ex.GetType().Name}: {ex.Message}\nStack: {ex.StackTrace}\nRequest: MessageId={request.MessageId}, SessionId={request.SessionId}, Content length={(request.Content?.Length ?? 0)}";
+        await LogErrorAsync(dbContext, errorText, cancellationToken);
         return Results.BadRequest(new { error = ex.Message });
     }
 })
 .WithName("CreateMessage");
+
+// Helper to log errors
+async Task LogErrorAsync(OpenCodeDbContext dbContext, string text, CancellationToken cancellationToken)
+{
+    try
+    {
+        dbContext.ErrorLogs.Add(new ErrorLog
+        {
+            OccurredAt = DateTimeOffset.UtcNow,
+            Text = text
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+    catch
+    {
+        // If we can't log to DB, at least write to console/file
+    }
+}
 
 app.Run();
 

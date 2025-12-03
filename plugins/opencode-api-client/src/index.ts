@@ -138,6 +138,9 @@ async function upsertSession(
 const processedSessions = new Set<string>();
 const processedMessages = new Set<string>();
 
+// Track which sessions are currently being processed (global lock per session)
+const processingSessionsLock = new Set<string>();
+
 /**
  * Convert mode string to numeric value
  */
@@ -235,19 +238,17 @@ export const OpenCodeApiClientPlugin: Plugin = async (context) => {
 
   // Get client for API calls
   const client = context.client;
-  
-  // Track processed messages to avoid duplicates
-  let isProcessingIdle = false;
 
   /**
    * Handle session.idle - fetch ALL messages with content and send to API
    */
   async function handleSessionIdle(sessionId: string): Promise<void> {
-    if (isProcessingIdle) {
-      log("SESSION.IDLE: skipping - already processing");
+    // Use global lock per session to prevent duplicate processing
+    if (processingSessionsLock.has(sessionId)) {
+      log(`SESSION.IDLE: skipping ${sessionId} - already processing (global lock)`);
       return;
     }
-    isProcessingIdle = true;
+    processingSessionsLock.add(sessionId);
 
     try {
       log(`SESSION.IDLE: Processing ${sessionId}`);
@@ -348,7 +349,7 @@ export const OpenCodeApiClientPlugin: Plugin = async (context) => {
     } catch (error) {
       log(`SESSION.IDLE ERROR: ${error}`);
     } finally {
-      isProcessingIdle = false;
+      processingSessionsLock.delete(sessionId);
     }
   }
 

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Olbrasoft.OpenCode.Extensions.Data.EntityFrameworkCore;
@@ -11,9 +12,11 @@ using Olbrasoft.OpenCode.Extensions.Data.EntityFrameworkCore;
 namespace OpenCode.Extensions.Data.EntityFrameworkCore.Migrations
 {
     [DbContext(typeof(OpenCodeDbContext))]
-    partial class OpenCodeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251203173040_AddUniqueParentMessagePerSessionConstraint")]
+    partial class AddUniqueParentMessagePerSessionConstraint
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,28 +24,6 @@ namespace OpenCode.Extensions.Data.EntityFrameworkCore.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("Olbrasoft.OpenCode.Extensions.Data.Entities.ErrorLog", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTimeOffset>("OccurredAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Text")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OccurredAt");
-
-                    b.ToTable("ErrorLogs", (string)null);
-                });
 
             modelBuilder.Entity("Olbrasoft.OpenCode.Extensions.Data.Entities.Message", b =>
                 {
