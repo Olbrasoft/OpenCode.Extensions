@@ -13,9 +13,9 @@ public class Message
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Session this message belongs to.
+    /// Session this message belongs to (foreign key).
     /// </summary>
-    public required string SessionId { get; set; }
+    public int SessionId { get; set; }
 
     /// <summary>
     /// Navigation property to Session.

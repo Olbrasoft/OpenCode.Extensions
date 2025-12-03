@@ -8,10 +8,17 @@ public class SessionConfiguration : IEntityTypeConfiguration<Session>
 {
     public void Configure(EntityTypeBuilder<Session> builder)
     {
+        // Primary key - auto-increment integer
         builder.HasKey(s => s.Id);
-
         builder.Property(s => s.Id)
-            .HasMaxLength(100);
+            .ValueGeneratedOnAdd();
+
+        // External identifier from OpenCode - unique index
+        builder.Property(s => s.SessionId)
+            .HasMaxLength(100)
+            .IsRequired();
+        builder.HasIndex(s => s.SessionId)
+            .IsUnique();
 
         builder.Property(s => s.Title)
             .HasMaxLength(500);

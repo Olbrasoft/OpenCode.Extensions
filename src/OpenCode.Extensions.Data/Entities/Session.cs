@@ -6,9 +6,14 @@ namespace Olbrasoft.OpenCode.Extensions.Data.Entities;
 public class Session
 {
     /// <summary>
-    /// Unique identifier (from OpenCode).
+    /// Internal database identifier (auto-increment).
     /// </summary>
-    public required string Id { get; set; }
+    public int Id { get; set; }
+
+    /// <summary>
+    /// External session identifier from OpenCode.
+    /// </summary>
+    public required string SessionId { get; set; }
 
     /// <summary>
     /// Session title or summary.

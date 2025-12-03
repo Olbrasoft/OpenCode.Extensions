@@ -23,7 +23,7 @@ public class OpenCodeDbContextTests
         using var context = CreateInMemoryContext();
         var session = new Session
         {
-            Id = "test-session-1",
+            SessionId = "test-session-1",
             Title = "Test Session",
             WorkingDirectory = "/home/user/project",
             CreatedAt = DateTimeOffset.UtcNow
@@ -34,9 +34,10 @@ public class OpenCodeDbContextTests
         await context.SaveChangesAsync();
 
         // Assert
-        var retrieved = await context.Sessions.FindAsync("test-session-1");
+        var retrieved = await context.Sessions.FirstOrDefaultAsync(s => s.SessionId == "test-session-1");
         Assert.NotNull(retrieved);
         Assert.Equal("Test Session", retrieved.Title);
+        Assert.True(retrieved.Id > 0); // Auto-generated integer ID
     }
 
     [Fact]
@@ -62,7 +63,7 @@ public class OpenCodeDbContextTests
 
         var session = new Session
         {
-            Id = "session-1",
+            SessionId = "session-1",
             CreatedAt = DateTimeOffset.UtcNow
         };
 
@@ -74,7 +75,7 @@ public class OpenCodeDbContextTests
         var message = new Message
         {
             Id = Guid.NewGuid(),
-            SessionId = session.Id,
+            SessionId = session.Id, // Now int FK to Session.Id
             ParticipantId = participant.Id,
             ProviderId = provider.Id,
             Role = Role.User,

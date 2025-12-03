@@ -10,8 +10,8 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
     {
         builder.HasKey(m => m.Id);
 
+        // SessionId is now int (FK to Session.Id)
         builder.Property(m => m.SessionId)
-            .HasMaxLength(100)
             .IsRequired();
 
         // Enum → int conversion
