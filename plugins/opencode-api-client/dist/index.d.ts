@@ -7,13 +7,15 @@
  *
  * IMPORTANT: This plugin MUST NOT use console.log() as it breaks OpenCode's TUI.
  * All logging goes to /tmp/opencode-plugin-logs/api-client.log
+ *
+ * Messages are ONLY created when session.idle fires - this ensures we have full content.
  */
 import type { Plugin } from "@opencode-ai/plugin";
 /**
  * OpenCode API Client Plugin
  *
- * Uses generic event handler to catch all events and route them appropriately.
- * Uses session.idle event + client API to get full message content.
+ * Messages are created ONLY on session.idle event when we have full content.
+ * No message.updated handler - that would create messages without content.
  */
 export declare const OpenCodeApiClientPlugin: Plugin;
 export default OpenCodeApiClientPlugin;

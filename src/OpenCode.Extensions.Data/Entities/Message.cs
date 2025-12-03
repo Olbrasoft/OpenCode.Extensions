@@ -79,9 +79,9 @@ public class Message
     public Participant? Participant { get; set; }
 
     /// <summary>
-    /// Message content as text.
+    /// Message content as text (required - message without content is not valid).
     /// </summary>
-    public string? Content { get; set; }
+    public required string Content { get; set; }
 
     /// <summary>
     /// Number of input tokens (for AI responses).

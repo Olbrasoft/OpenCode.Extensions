@@ -7,6 +7,8 @@
  *
  * IMPORTANT: This plugin MUST NOT use console.log() as it breaks OpenCode's TUI.
  * All logging goes to /tmp/opencode-plugin-logs/api-client.log
+ *
+ * Messages are ONLY created when session.idle fires - this ensures we have full content.
  */
 import { appendFileSync, mkdirSync, existsSync } from "fs";
 // Configuration
@@ -39,12 +41,6 @@ function log(message) {
  */
 function epochToIso(epochMs) {
     return new Date(epochMs).toISOString();
-}
-function isUserMessage(info) {
-    return info.role === "user";
-}
-function isAssistantMessage(info) {
-    return info.role === "assistant";
 }
 /**
  * Send session to our C# API (upsert - creates or updates)
@@ -85,6 +81,8 @@ const processedMessages = new Set();
  * Convert mode string to numeric value
  */
 function modeToNumber(mode) {
+    if (!mode)
+        return null;
     switch (mode.toLowerCase()) {
         case "build": return 1;
         case "plan": return 2;
@@ -140,66 +138,6 @@ async function handleSessionUpdated(properties) {
     log(`SESSION.UPDATED: ${sessionId} - "${title}"`);
     await upsertSession(sessionId, title, directory, createdAt);
 }
-/**
- * Handle message.updated event
- */
-async function handleMessageUpdated(properties) {
-    const info = properties?.info;
-    if (!info?.id) {
-        return;
-    }
-    // Only process completed assistant messages or user messages
-    // Assistant messages should have completed time, user messages are always complete
-    if (isAssistantMessage(info) && !info.time.completed) {
-        // Assistant message still in progress - wait for completion
-        return;
-    }
-    // Avoid duplicate API calls
-    const cacheKey = `${info.id}:${info.time.created}`;
-    if (processedMessages.has(cacheKey)) {
-        return;
-    }
-    processedMessages.add(cacheKey);
-    // Clean up old entries after 30 seconds
-    setTimeout(() => processedMessages.delete(cacheKey), 30000);
-    log(`MESSAGE.UPDATED: ${info.id} (role: ${info.role})`);
-    // Build the request based on message type
-    let request;
-    if (isUserMessage(info)) {
-        request = {
-            messageId: info.id,
-            sessionId: info.sessionID,
-            role: 0, // User
-            mode: null, // User messages don't have mode
-            participantIdentifier: "user-jirka", // Will be resolved by API
-            providerName: "HumanInput",
-            content: null, // Content comes from parts, we'll need to collect it separately
-            tokensInput: null,
-            tokensOutput: null,
-            cost: null,
-            createdAt: epochToIso(info.time.created),
-            parentMessageId: null
-        };
-    }
-    else {
-        // Assistant message
-        request = {
-            messageId: info.id,
-            sessionId: info.sessionID,
-            role: 1, // Assistant
-            mode: modeToNumber(info.mode),
-            participantIdentifier: info.modelID, // e.g., "claude-sonnet-4-20250514"
-            providerName: info.providerID, // e.g., "anthropic"
-            content: null, // Content comes from parts
-            tokensInput: info.tokens.input + info.tokens.cache.read,
-            tokensOutput: info.tokens.output,
-            cost: info.cost,
-            createdAt: epochToIso(info.time.created),
-            parentMessageId: info.parentID
-        };
-    }
-    await createMessage(request);
-}
 log("================================================================================");
 log("==================== OPENCODE API CLIENT PLUGIN LOADED ========================");
 log(`==================== API: ${API_BASE_URL} ======================================`);
@@ -217,8 +155,8 @@ function extractTextFromParts(parts) {
 /**
  * OpenCode API Client Plugin
  *
- * Uses generic event handler to catch all events and route them appropriately.
- * Uses session.idle event + client API to get full message content.
+ * Messages are created ONLY on session.idle event when we have full content.
+ * No message.updated handler - that would create messages without content.
  */
 export const OpenCodeApiClientPlugin = async (context) => {
     log("==================== PLUGIN INITIALIZED ====================");
@@ -227,11 +165,10 @@ export const OpenCodeApiClientPlugin = async (context) => {
     log(`Project ID: ${context.project?.id}`);
     // Get client for API calls
     const client = context.client;
-    // Track last processed message to avoid duplicates
-    let lastProcessedMessageId = null;
+    // Track processed messages to avoid duplicates
     let isProcessingIdle = false;
     /**
-     * Handle session.idle - fetch full messages with content and send to API
+     * Handle session.idle - fetch ALL messages with content and send to API
      */
     async function handleSessionIdle(sessionId) {
         if (isProcessingIdle) {
@@ -251,47 +188,62 @@ export const OpenCodeApiClientPlugin = async (context) => {
             });
             const messages = messagesResponse.data ?? [];
             log(`SESSION.IDLE: fetched ${messages.length} messages`);
-            // Find the last assistant message with content that we haven't processed
-            const lastAssistantMessage = [...messages]
-                .reverse()
-                .find((m) => {
-                if (m.info.role !== "assistant")
-                    return false;
-                const parts = m.parts;
-                return parts?.some(p => (p.type === "text" || p.type === "markdown") && (p.text || p.content));
-            });
-            if (!lastAssistantMessage) {
-                log("SESSION.IDLE: no assistant message with content found");
-                return;
+            // Process all messages that haven't been sent yet
+            for (const message of messages) {
+                const msgInfo = message.info;
+                // Skip if already processed
+                if (processedMessages.has(msgInfo.id)) {
+                    continue;
+                }
+                // Extract text content from parts
+                const parts = message.parts;
+                const textContent = extractTextFromParts(parts);
+                // Skip messages without content
+                if (!textContent || textContent.trim().length === 0) {
+                    log(`SESSION.IDLE: skipping message ${msgInfo.id} - no content`);
+                    continue;
+                }
+                // Mark as processed
+                processedMessages.add(msgInfo.id);
+                let request;
+                if (msgInfo.role === "user") {
+                    const userInfo = msgInfo;
+                    request = {
+                        messageId: userInfo.id,
+                        sessionId: userInfo.sessionID,
+                        role: 0, // User
+                        mode: null,
+                        participantIdentifier: "user-jirka",
+                        providerName: "HumanInput",
+                        content: textContent,
+                        tokensInput: null,
+                        tokensOutput: null,
+                        cost: null,
+                        createdAt: epochToIso(userInfo.time.created),
+                        parentMessageId: null
+                    };
+                }
+                else {
+                    const assistantInfo = msgInfo;
+                    request = {
+                        messageId: assistantInfo.id,
+                        sessionId: assistantInfo.sessionID,
+                        role: 1, // Assistant
+                        mode: modeToNumber(assistantInfo.mode),
+                        participantIdentifier: assistantInfo.modelID,
+                        providerName: assistantInfo.providerID,
+                        content: textContent,
+                        tokensInput: assistantInfo.tokens.input + assistantInfo.tokens.cache.read,
+                        tokensOutput: assistantInfo.tokens.output,
+                        cost: assistantInfo.cost,
+                        createdAt: epochToIso(assistantInfo.time.created),
+                        parentMessageId: assistantInfo.parentID
+                    };
+                }
+                log(`SESSION.IDLE: creating message ${msgInfo.id} (${msgInfo.role}) with ${textContent.length} chars`);
+                await createMessage(request);
             }
-            const msgInfo = lastAssistantMessage.info;
-            if (msgInfo.id === lastProcessedMessageId) {
-                log(`SESSION.IDLE: message ${msgInfo.id} already processed`);
-                return;
-            }
-            lastProcessedMessageId = msgInfo.id;
-            // Extract text content from parts
-            const parts = lastAssistantMessage.parts;
-            const textContent = extractTextFromParts(parts);
-            log(`SESSION.IDLE: processing message ${msgInfo.id} with ${textContent.length} chars of content`);
-            // Update the message in database with content
-            // We use a PATCH/PUT endpoint or re-send with content
-            const request = {
-                messageId: msgInfo.id,
-                sessionId: msgInfo.sessionID,
-                role: 1, // Assistant
-                mode: modeToNumber(msgInfo.mode),
-                participantIdentifier: msgInfo.modelID,
-                providerName: msgInfo.providerID,
-                content: textContent || null,
-                tokensInput: msgInfo.tokens.input + msgInfo.tokens.cache.read,
-                tokensOutput: msgInfo.tokens.output,
-                cost: msgInfo.cost,
-                createdAt: epochToIso(msgInfo.time.created),
-                parentMessageId: msgInfo.parentID
-            };
-            await createMessage(request);
-            log(`SESSION.IDLE: message ${msgInfo.id} sent with content`);
+            log(`SESSION.IDLE: done processing ${sessionId}`);
         }
         catch (error) {
             log(`SESSION.IDLE ERROR: ${error}`);
@@ -312,46 +264,16 @@ export const OpenCodeApiClientPlugin = async (context) => {
                     await handleSessionUpdated(properties);
                     break;
                 case "session.idle":
-                    // This is the main event for processing completed messages with content
+                    // This is THE event for creating messages - with full content
                     const sessionId = properties?.sessionID;
                     if (sessionId) {
                         await handleSessionIdle(sessionId);
                     }
                     break;
-                case "message.updated":
-                    // Still process for metadata (tokens, cost) but without content
-                    await handleMessageUpdated(properties);
-                    break;
-                case "message.part.updated":
-                    // Log text message parts for debugging
-                    const part = properties?.part;
-                    if (part?.type === "text") {
-                        const text = part.text || "";
-                        if (text.length > 0) {
-                            const preview = text.length > 50 ? text.substring(0, 50) + "..." : text;
-                            log(`MESSAGE.TEXT: "${preview}"`);
-                        }
-                    }
-                    break;
-                // Ignore noisy events
-                case "session.diff":
-                case "tool.execute.before":
-                case "tool.execute.after":
-                    break;
+                // Ignore all other events - we don't need them
                 default:
-                    // Log unknown events for debugging
-                    if (eventType && !eventType.startsWith("message.part")) {
-                        log(`EVENT: ${eventType}`);
-                    }
                     break;
             }
-        },
-        // Keep specific handlers for tool events (these work differently)
-        "tool.execute.before": async ({ tool, sessionID }) => {
-            log(`TOOL.BEFORE: ${tool}`);
-        },
-        "tool.execute.after": async ({ tool, sessionID }) => {
-            log(`TOOL.AFTER: ${tool}`);
         },
     };
 };

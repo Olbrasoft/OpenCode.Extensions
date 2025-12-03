@@ -42,9 +42,9 @@ public class CreateMessageCommand : BaseCommand<int>
     public required string ProviderName { get; init; }
 
     /// <summary>
-    /// Message content as text.
+    /// Message content as text (required).
     /// </summary>
-    public string? Content { get; init; }
+    public required string Content { get; init; }
 
     /// <summary>
     /// Number of input tokens (for AI responses).
