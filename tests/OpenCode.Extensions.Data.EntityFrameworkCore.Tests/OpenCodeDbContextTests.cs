@@ -155,7 +155,7 @@ public class OpenCodeDbContextTests
             ParticipantTypeId = (int)ParticipantType.AiModel
         };
 
-        var provider = new Provider { Id = 1, Name = "Keyboard" };
+        var provider = new Provider { Id = 1, Name = "HumanInput" };
         var aiProvider = new Provider { Id = 2, Name = "Anthropic" };
         var mode = new ModeEntity { Id = (int)Mode.Build, Name = nameof(Mode.Build) };
         var session = new Session { SessionId = "session-1", CreatedAt = DateTimeOffset.UtcNow };
@@ -234,8 +234,8 @@ public class OpenCodeDbContextTests
         var providers = await context.Providers.ToListAsync();
 
         // Assert
-        Assert.Equal(9, providers.Count); // 9 providers including xAI
-        Assert.Contains(providers, p => p.Name == "Keyboard");
+        Assert.Equal(8, providers.Count); // 8 providers (HumanInput, VoiceAssistant, Anthropic, OpenAI, GitHubCopilot, Google, AzureOpenAI, xAI)
+        Assert.Contains(providers, p => p.Name == "HumanInput");
         Assert.Contains(providers, p => p.Name == "VoiceAssistant");
         Assert.Contains(providers, p => p.Name == "Anthropic");
         Assert.Contains(providers, p => p.Name == "OpenAI");

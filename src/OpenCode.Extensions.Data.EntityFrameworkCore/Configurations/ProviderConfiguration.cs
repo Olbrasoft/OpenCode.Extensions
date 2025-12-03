@@ -24,15 +24,14 @@ public class ProviderConfiguration : IEntityTypeConfiguration<Provider>
 
         // Seed data for Providers
         builder.HasData(
-            new Provider { Id = 1, Name = "Keyboard", Description = "Direct typing to terminal" },
-            new Provider { Id = 2, Name = "VoiceAssistant", Description = "ContinuousListener - voice input" },
-            new Provider { Id = 3, Name = "HumanCombination", Description = "Combination of keyboard and voice" },
-            new Provider { Id = 4, Name = "Anthropic", Description = "Claude models via Anthropic API" },
-            new Provider { Id = 5, Name = "OpenAI", Description = "GPT models via OpenAI API" },
-            new Provider { Id = 6, Name = "GitHubCopilot", Description = "GitHub Copilot (routes to various models)" },
-            new Provider { Id = 7, Name = "Google", Description = "Gemini models via Google AI" },
-            new Provider { Id = 8, Name = "AzureOpenAI", Description = "Azure OpenAI Service" },
-            new Provider { Id = 9, Name = "xAI", Description = "Grok models via xAI" }
+            new Provider { Id = 1, Name = "HumanInput", Description = "Human input (keyboard, voice, or combination)" },
+            new Provider { Id = 2, Name = "VoiceAssistant", Description = "System pipeline - voice processing orchestration" },
+            new Provider { Id = 3, Name = "Anthropic", Description = "Claude models via Anthropic API" },
+            new Provider { Id = 4, Name = "OpenAI", Description = "GPT models via OpenAI API" },
+            new Provider { Id = 5, Name = "GitHubCopilot", Description = "GitHub Copilot (routes to various models)" },
+            new Provider { Id = 6, Name = "Google", Description = "Gemini models via Google AI" },
+            new Provider { Id = 7, Name = "AzureOpenAI", Description = "Azure OpenAI Service" },
+            new Provider { Id = 8, Name = "xAI", Description = "Grok models via xAI" }
         );
     }
 }

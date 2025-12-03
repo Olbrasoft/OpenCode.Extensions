@@ -2,7 +2,7 @@ namespace Olbrasoft.OpenCode.Extensions.Data.Entities;
 
 /// <summary>
 /// Provider represents the source/channel from which a message originated.
-/// Examples: Keyboard, VoiceAssistant, Anthropic API, OpenAI API.
+/// Examples: HumanInput, VoiceAssistant, Anthropic API, OpenAI API.
 /// </summary>
 public class Provider
 {
@@ -12,7 +12,7 @@ public class Provider
     public int Id { get; set; }
 
     /// <summary>
-    /// Provider name (e.g., "Keyboard", "VoiceAssistant", "Anthropic").
+    /// Provider name (e.g., "HumanInput", "VoiceAssistant", "Anthropic").
     /// </summary>
     public required string Name { get; set; }
 
