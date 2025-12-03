@@ -32,4 +32,9 @@ public class Participant
     /// Messages created by this participant.
     /// </summary>
     public ICollection<Message> Messages { get; set; } = [];
+
+    /// <summary>
+    /// Monologs created by this participant.
+    /// </summary>
+    public ICollection<Monolog> Monologs { get; set; } = [];
 }

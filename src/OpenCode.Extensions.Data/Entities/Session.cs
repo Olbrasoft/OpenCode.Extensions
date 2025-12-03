@@ -39,4 +39,9 @@ public class Session
     /// Messages in this session.
     /// </summary>
     public ICollection<Message> Messages { get; set; } = [];
+
+    /// <summary>
+    /// Monologs in this session.
+    /// </summary>
+    public ICollection<Monolog> Monologs { get; set; } = [];
 }
