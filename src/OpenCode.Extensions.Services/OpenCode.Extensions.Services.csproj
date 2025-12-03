@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenCode.Extensions.Data\OpenCode.Extensions.Data.csproj" />
+    <ProjectReference Include="..\..\..\Mediation\src\Mediation\Mediation.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Olbrasoft.Mediation" />
+  </ItemGroup>
+
+</Project>
