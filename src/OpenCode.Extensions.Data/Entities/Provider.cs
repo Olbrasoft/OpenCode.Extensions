@@ -25,9 +25,4 @@ public class Provider
     /// Messages received through this provider.
     /// </summary>
     public ICollection<Message> Messages { get; set; } = [];
-
-    /// <summary>
-    /// AI models available from this provider.
-    /// </summary>
-    public ICollection<Model> Models { get; set; } = [];
 }

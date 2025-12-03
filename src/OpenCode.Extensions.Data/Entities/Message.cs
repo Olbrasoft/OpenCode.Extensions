@@ -1,3 +1,5 @@
+using Olbrasoft.OpenCode.Extensions.Data.Enums;
+
 namespace Olbrasoft.OpenCode.Extensions.Data.Entities;
 
 /// <summary>
@@ -41,14 +43,10 @@ public class Message
     public ICollection<Message> ChildMessages { get; set; } = [];
 
     /// <summary>
-    /// Role ID (foreign key to Roles table).
+    /// Role in conversation (User or Assistant).
+    /// Stored as integer, mapped to Role enum.
     /// </summary>
-    public int RoleId { get; set; }
-
-    /// <summary>
-    /// Navigation property to RoleEntity.
-    /// </summary>
-    public RoleEntity? RoleEntity { get; set; }
+    public Role Role { get; set; }
 
     /// <summary>
     /// Mode ID (foreign key to Modes table).
@@ -61,7 +59,7 @@ public class Message
     public ModeEntity? ModeEntity { get; set; }
 
     /// <summary>
-    /// Provider ID (foreign key to Providers table).
+    /// Provider ID - where the message came from (foreign key to Providers table).
     /// </summary>
     public int ProviderId { get; set; }
 
@@ -71,14 +69,14 @@ public class Message
     public Provider? Provider { get; set; }
 
     /// <summary>
-    /// Model ID (foreign key to Models table). Null for user messages.
+    /// Participant ID - who created/sent this message (foreign key to Participants table).
     /// </summary>
-    public int? ModelId { get; set; }
+    public int ParticipantId { get; set; }
 
     /// <summary>
-    /// Navigation property to Model.
+    /// Navigation property to Participant.
     /// </summary>
-    public Model? Model { get; set; }
+    public Participant? Participant { get; set; }
 
     /// <summary>
     /// Message content as text.

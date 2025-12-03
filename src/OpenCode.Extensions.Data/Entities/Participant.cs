@@ -1,5 +1,3 @@
-using Olbrasoft.OpenCode.Extensions.Data.Enums;
-
 namespace Olbrasoft.OpenCode.Extensions.Data.Entities;
 
 /// <summary>
@@ -9,9 +7,9 @@ namespace Olbrasoft.OpenCode.Extensions.Data.Entities;
 public class Participant
 {
     /// <summary>
-    /// Unique identifier.
+    /// Primary key (auto-increment integer).
     /// </summary>
-    public Guid Id { get; set; }
+    public int Id { get; set; }
 
     /// <summary>
     /// Human-readable label (e.g., "Jirka", "Claude Sonnet 4", "Deploy Bot").
@@ -19,14 +17,19 @@ public class Participant
     public required string Label { get; set; }
 
     /// <summary>
-    /// Technical identifier (e.g., "user-jirka", "claude-sonnet-4-20250514", "ci-github-actions").
+    /// Technical identifier (e.g., "user-jirka", "claude-sonnet-4", "ci-github-actions").
     /// </summary>
     public required string Identifier { get; set; }
 
     /// <summary>
-    /// Type of participant (Human, AiModel, Script, System).
+    /// Type of participant (foreign key to ParticipantTypes table).
     /// </summary>
-    public ParticipantType Type { get; set; }
+    public int ParticipantTypeId { get; set; }
+
+    /// <summary>
+    /// Navigation property to ParticipantTypeEntity.
+    /// </summary>
+    public ParticipantTypeEntity? ParticipantType { get; set; }
 
     /// <summary>
     /// Messages created by this participant.

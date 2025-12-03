@@ -8,6 +8,8 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
 {
     public void Configure(EntityTypeBuilder<Message> builder)
     {
+        builder.ToTable("Messages");
+
         // Primary key - auto-increment integer
         builder.HasKey(m => m.Id);
         builder.Property(m => m.Id)
@@ -32,11 +34,9 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
             .HasForeignKey(m => m.ParentMessageId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Role FK (referential table)
-        builder.HasOne(m => m.RoleEntity)
-            .WithMany(r => r.Messages)
-            .HasForeignKey(m => m.RoleId)
-            .OnDelete(DeleteBehavior.Restrict);
+        // Role - enum stored as int (no FK, just conversion)
+        builder.Property(m => m.Role)
+            .HasConversion<int>();
 
         // Mode FK (referential table)
         builder.HasOne(m => m.ModeEntity)
@@ -50,10 +50,10 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
             .HasForeignKey(m => m.ProviderId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Model FK (nullable for user messages)
-        builder.HasOne(m => m.Model)
-            .WithMany(mo => mo.Messages)
-            .HasForeignKey(m => m.ModelId)
+        // Participant FK - who created/sent this message
+        builder.HasOne(m => m.Participant)
+            .WithMany(p => p.Messages)
+            .HasForeignKey(m => m.ParticipantId)
             .OnDelete(DeleteBehavior.Restrict);
 
         // Cost column configuration

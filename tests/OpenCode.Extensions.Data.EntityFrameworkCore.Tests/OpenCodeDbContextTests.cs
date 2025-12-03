@@ -46,17 +46,25 @@ public class OpenCodeDbContextTests
         // Arrange
         using var context = CreateInMemoryContext();
 
+        var participantType = new ParticipantTypeEntity
+        {
+            Id = (int)ParticipantType.Human,
+            Name = nameof(ParticipantType.Human)
+        };
+
+        var participant = new Participant
+        {
+            Id = 1,
+            Label = "Test User",
+            Identifier = "test-user",
+            ParticipantTypeId = (int)ParticipantType.Human
+        };
+
         var provider = new Provider
         {
             Id = 100,
             Name = "TestProvider",
             Description = "Test"
-        };
-
-        var role = new RoleEntity
-        {
-            Id = (int)Role.User,
-            Name = nameof(Role.User)
         };
 
         var mode = new ModeEntity
@@ -71,8 +79,9 @@ public class OpenCodeDbContextTests
             CreatedAt = DateTimeOffset.UtcNow
         };
 
+        context.ParticipantTypes.Add(participantType);
+        context.Participants.Add(participant);
         context.Providers.Add(provider);
-        context.Roles.Add(role);
         context.Modes.Add(mode);
         context.Sessions.Add(session);
         await context.SaveChangesAsync();
@@ -82,7 +91,8 @@ public class OpenCodeDbContextTests
             MessageId = "msg-123",
             SessionId = session.Id,
             ProviderId = provider.Id,
-            RoleId = (int)Role.User,
+            ParticipantId = participant.Id,
+            Role = Role.User,
             ModeId = (int)Mode.Build,
             Content = "Hello, World!",
             CreatedAt = DateTimeOffset.UtcNow
@@ -94,21 +104,118 @@ public class OpenCodeDbContextTests
 
         // Assert
         var retrieved = await context.Messages
-            .Include(m => m.RoleEntity)
+            .Include(m => m.Participant)
             .Include(m => m.ModeEntity)
             .Include(m => m.Provider)
             .FirstOrDefaultAsync(m => m.MessageId == "msg-123");
 
         Assert.NotNull(retrieved);
         Assert.Equal("Hello, World!", retrieved.Content);
-        Assert.Equal((int)Role.User, retrieved.RoleId);
+        Assert.Equal(Role.User, retrieved.Role);
         Assert.Equal((int)Mode.Build, retrieved.ModeId);
-        Assert.NotNull(retrieved.RoleEntity);
-        Assert.Equal("User", retrieved.RoleEntity.Name);
+        Assert.NotNull(retrieved.Participant);
+        Assert.Equal("Test User", retrieved.Participant.Label);
         Assert.NotNull(retrieved.ModeEntity);
         Assert.Equal("Build", retrieved.ModeEntity.Name);
         Assert.NotNull(retrieved.Provider);
         Assert.Equal("TestProvider", retrieved.Provider.Name);
+    }
+
+    [Fact]
+    public async Task CanAddMessageWithParentMessage()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+
+        var participantType = new ParticipantTypeEntity
+        {
+            Id = (int)ParticipantType.Human,
+            Name = nameof(ParticipantType.Human)
+        };
+
+        var humanParticipant = new Participant
+        {
+            Id = 1,
+            Label = "User",
+            Identifier = "user",
+            ParticipantTypeId = (int)ParticipantType.Human
+        };
+
+        var aiParticipantType = new ParticipantTypeEntity
+        {
+            Id = (int)ParticipantType.AiModel,
+            Name = nameof(ParticipantType.AiModel)
+        };
+
+        var aiParticipant = new Participant
+        {
+            Id = 2,
+            Label = "Claude",
+            Identifier = "claude-sonnet-4",
+            ParticipantTypeId = (int)ParticipantType.AiModel
+        };
+
+        var provider = new Provider { Id = 1, Name = "Keyboard" };
+        var aiProvider = new Provider { Id = 2, Name = "Anthropic" };
+        var mode = new ModeEntity { Id = (int)Mode.Build, Name = nameof(Mode.Build) };
+        var session = new Session { SessionId = "session-1", CreatedAt = DateTimeOffset.UtcNow };
+
+        context.ParticipantTypes.Add(participantType);
+        context.ParticipantTypes.Add(aiParticipantType);
+        context.Participants.Add(humanParticipant);
+        context.Participants.Add(aiParticipant);
+        context.Providers.Add(provider);
+        context.Providers.Add(aiProvider);
+        context.Modes.Add(mode);
+        context.Sessions.Add(session);
+        await context.SaveChangesAsync();
+
+        // User asks a question
+        var userMessage = new Message
+        {
+            MessageId = "msg-1",
+            SessionId = session.Id,
+            ProviderId = provider.Id,
+            ParticipantId = humanParticipant.Id,
+            Role = Role.User,
+            ModeId = (int)Mode.Build,
+            Content = "What is SOLID?",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        context.Messages.Add(userMessage);
+        await context.SaveChangesAsync();
+
+        // Assistant responds (with ParentMessageId)
+        var assistantMessage = new Message
+        {
+            MessageId = "msg-2",
+            SessionId = session.Id,
+            ProviderId = aiProvider.Id,
+            ParticipantId = aiParticipant.Id,
+            Role = Role.Assistant,
+            ModeId = (int)Mode.Build,
+            Content = "SOLID is a set of five design principles...",
+            ParentMessageId = userMessage.Id,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        // Act
+        context.Messages.Add(assistantMessage);
+        await context.SaveChangesAsync();
+
+        // Assert
+        var retrieved = await context.Messages
+            .Include(m => m.ParentMessage)
+            .Include(m => m.Participant)
+            .FirstOrDefaultAsync(m => m.MessageId == "msg-2");
+
+        Assert.NotNull(retrieved);
+        Assert.Equal(Role.Assistant, retrieved.Role);
+        Assert.NotNull(retrieved.ParentMessage);
+        Assert.Equal("msg-1", retrieved.ParentMessage.MessageId);
+        Assert.Equal("What is SOLID?", retrieved.ParentMessage.Content);
+        Assert.NotNull(retrieved.Participant);
+        Assert.Equal("Claude", retrieved.Participant.Label);
     }
 
     [Fact]
@@ -158,7 +265,7 @@ public class OpenCodeDbContextTests
     }
 
     [Fact]
-    public async Task RoleSeedData_IsApplied()
+    public async Task ParticipantTypeSeedData_IsApplied()
     {
         // Arrange - use SQLite instead of InMemory to test seed data
         var options = new DbContextOptionsBuilder<OpenCodeDbContext>()
@@ -170,16 +277,18 @@ public class OpenCodeDbContextTests
         await context.Database.EnsureCreatedAsync();
 
         // Act
-        var roles = await context.Roles.ToListAsync();
+        var types = await context.ParticipantTypes.ToListAsync();
 
         // Assert
-        Assert.Equal(2, roles.Count);
-        Assert.Contains(roles, r => r.Id == (int)Role.User && r.Name == "User");
-        Assert.Contains(roles, r => r.Id == (int)Role.Assistant && r.Name == "Assistant");
+        Assert.Equal(4, types.Count);
+        Assert.Contains(types, t => t.Id == (int)ParticipantType.Human && t.Name == "Human");
+        Assert.Contains(types, t => t.Id == (int)ParticipantType.AiModel && t.Name == "AiModel");
+        Assert.Contains(types, t => t.Id == (int)ParticipantType.Script && t.Name == "Script");
+        Assert.Contains(types, t => t.Id == (int)ParticipantType.System && t.Name == "System");
     }
 
     [Fact]
-    public async Task ModelSeedData_IsApplied()
+    public async Task ParticipantSeedData_IsApplied()
     {
         // Arrange - use SQLite instead of InMemory to test seed data
         var options = new DbContextOptionsBuilder<OpenCodeDbContext>()
@@ -191,33 +300,36 @@ public class OpenCodeDbContextTests
         await context.Database.EnsureCreatedAsync();
 
         // Act
-        var models = await context.Models.ToListAsync();
+        var participants = await context.Participants.ToListAsync();
 
-        // Assert - 16 models from GitHub Copilot supported models (December 2025)
-        Assert.Equal(16, models.Count);
-        
+        // Assert - 17 participants: 1 human + 16 AI models
+        Assert.Equal(17, participants.Count);
+
+        // Human
+        Assert.Contains(participants, p => p.Identifier == "user-jirka" && p.ParticipantTypeId == (int)ParticipantType.Human);
+
         // Anthropic models
-        Assert.Contains(models, m => m.Name == "claude-haiku-4.5");
-        Assert.Contains(models, m => m.Name == "claude-sonnet-4");
-        Assert.Contains(models, m => m.Name == "claude-sonnet-4.5");
-        Assert.Contains(models, m => m.Name == "claude-opus-4.1");
-        Assert.Contains(models, m => m.Name == "claude-opus-4.5");
-        
+        Assert.Contains(participants, p => p.Identifier == "claude-haiku-4.5");
+        Assert.Contains(participants, p => p.Identifier == "claude-sonnet-4");
+        Assert.Contains(participants, p => p.Identifier == "claude-sonnet-4.5");
+        Assert.Contains(participants, p => p.Identifier == "claude-opus-4.1");
+        Assert.Contains(participants, p => p.Identifier == "claude-opus-4.5");
+
         // OpenAI models
-        Assert.Contains(models, m => m.Name == "gpt-4.1");
-        Assert.Contains(models, m => m.Name == "gpt-5");
-        Assert.Contains(models, m => m.Name == "gpt-5-mini");
-        Assert.Contains(models, m => m.Name == "gpt-5-codex");
-        Assert.Contains(models, m => m.Name == "gpt-5.1");
-        Assert.Contains(models, m => m.Name == "gpt-5.1-codex");
-        Assert.Contains(models, m => m.Name == "gpt-5.1-codex-mini");
-        Assert.Contains(models, m => m.Name == "raptor-mini");
-        
+        Assert.Contains(participants, p => p.Identifier == "gpt-4.1");
+        Assert.Contains(participants, p => p.Identifier == "gpt-5");
+        Assert.Contains(participants, p => p.Identifier == "gpt-5-mini");
+        Assert.Contains(participants, p => p.Identifier == "gpt-5-codex");
+        Assert.Contains(participants, p => p.Identifier == "gpt-5.1");
+        Assert.Contains(participants, p => p.Identifier == "gpt-5.1-codex");
+        Assert.Contains(participants, p => p.Identifier == "gpt-5.1-codex-mini");
+        Assert.Contains(participants, p => p.Identifier == "raptor-mini");
+
         // Google models
-        Assert.Contains(models, m => m.Name == "gemini-2.5-pro");
-        Assert.Contains(models, m => m.Name == "gemini-3-pro");
-        
+        Assert.Contains(participants, p => p.Identifier == "gemini-2.5-pro");
+        Assert.Contains(participants, p => p.Identifier == "gemini-3-pro");
+
         // xAI models
-        Assert.Contains(models, m => m.Name == "grok-code-fast-1");
+        Assert.Contains(participants, p => p.Identifier == "grok-code-fast-1");
     }
 }
