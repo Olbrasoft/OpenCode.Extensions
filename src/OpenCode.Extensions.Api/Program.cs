@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Olbrasoft.Mediation;
+using Olbrasoft.OpenCode.Extensions.Data.Commands;
 using Olbrasoft.OpenCode.Extensions.Data.EntityFrameworkCore;
+using Olbrasoft.OpenCode.Extensions.Data.Enums;
 using OpenCode.Extensions.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -60,6 +62,38 @@ app.MapGet("/api/sessions/{sessionId}", async (string sessionId, ISessionService
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTimeOffset.UtcNow }))
     .WithName("HealthCheck");
 
+// Create message
+app.MapPost("/api/messages", async (CreateMessageRequest request, IMediator mediator, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var command = new CreateMessageCommand
+        {
+            MessageId = request.MessageId,
+            SessionId = request.SessionId,
+            Role = request.Role,
+            Mode = request.Mode,
+            ParticipantIdentifier = request.ParticipantIdentifier,
+            ProviderName = request.ProviderName,
+            Content = request.Content,
+            TokensInput = request.TokensInput,
+            TokensOutput = request.TokensOutput,
+            Cost = request.Cost,
+            CreatedAt = request.CreatedAt,
+            ParentMessageId = request.ParentMessageId
+        };
+
+        var id = await mediator.MediateAsync(command, cancellationToken);
+
+        return Results.Ok(new { id, messageId = request.MessageId });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+})
+.WithName("CreateMessage");
+
 app.Run();
 
 /// <summary>
@@ -70,3 +104,20 @@ public record CreateSessionRequest(
     string? Title,
     string? WorkingDirectory,
     DateTimeOffset CreatedAt);
+
+/// <summary>
+/// Request model for creating a new message.
+/// </summary>
+public record CreateMessageRequest(
+    string MessageId,
+    string SessionId,
+    Role Role,
+    Mode Mode,
+    string ParticipantIdentifier,
+    string ProviderName,
+    string? Content,
+    int? TokensInput,
+    int? TokensOutput,
+    decimal? Cost,
+    DateTimeOffset CreatedAt,
+    string? ParentMessageId);
