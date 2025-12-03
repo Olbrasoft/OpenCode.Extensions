@@ -22,6 +22,16 @@ builder.Services
 builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddScoped<IMonologService, MonologService>();
 
+// Add OpenAI Embedding Service
+builder.Services.Configure<OpenAiEmbeddingOptions>(
+    builder.Configuration.GetSection("OpenAiEmbedding"));
+builder.Services.AddHttpClient<IEmbeddingService, OpenAiEmbeddingService>();
+
+// Add Embedding Background Service
+builder.Services.Configure<EmbeddingBackgroundServiceOptions>(
+    builder.Configuration.GetSection("EmbeddingBackgroundService"));
+builder.Services.AddHostedService<EmbeddingBackgroundService>();
+
 var app = builder.Build();
 
 // Configure pipeline
