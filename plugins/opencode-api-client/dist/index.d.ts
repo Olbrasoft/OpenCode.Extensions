@@ -13,6 +13,7 @@ import type { Plugin } from "@opencode-ai/plugin";
  * OpenCode API Client Plugin
  *
  * Uses generic event handler to catch all events and route them appropriately.
+ * Uses session.idle event + client API to get full message content.
  */
 export declare const OpenCodeApiClientPlugin: Plugin;
 export default OpenCodeApiClientPlugin;

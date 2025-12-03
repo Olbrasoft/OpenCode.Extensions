@@ -91,6 +91,36 @@ public class CreateMessageCommandHandler : ICommandHandler<CreateMessageCommand,
             parentMessageId = parentMessage?.Id;
         }
 
+        // Check if message already exists (upsert logic)
+        var existingMessage = await _context.Messages
+            .FirstOrDefaultAsync(m => m.MessageId == command.MessageId, token);
+
+        if (existingMessage != null)
+        {
+            // Update existing message - especially content which may come later
+            if (command.Content != null)
+            {
+                existingMessage.Content = command.Content;
+            }
+            // Update other fields that may have changed
+            if (command.TokensInput.HasValue)
+            {
+                existingMessage.TokensInput = command.TokensInput;
+            }
+            if (command.TokensOutput.HasValue)
+            {
+                existingMessage.TokensOutput = command.TokensOutput;
+            }
+            if (command.Cost.HasValue)
+            {
+                existingMessage.Cost = command.Cost;
+            }
+            
+            await _context.SaveChangesAsync(token);
+            return existingMessage.Id;
+        }
+
+        // Create new message
         var message = new Message
         {
             MessageId = command.MessageId,

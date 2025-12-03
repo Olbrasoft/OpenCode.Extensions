@@ -205,15 +205,101 @@ log("==================== OPENCODE API CLIENT PLUGIN LOADED ====================
 log(`==================== API: ${API_BASE_URL} ======================================`);
 log("================================================================================");
 /**
+ * Extract text content from message parts
+ * Handles multiple content types: text, markdown, content
+ */
+function extractTextFromParts(parts) {
+    return parts
+        .filter((part) => (part.type === "text" || part.type === "markdown") && (part.text || part.content))
+        .map((part) => part.text || part.content || "")
+        .join("\n");
+}
+/**
  * OpenCode API Client Plugin
  *
  * Uses generic event handler to catch all events and route them appropriately.
+ * Uses session.idle event + client API to get full message content.
  */
 export const OpenCodeApiClientPlugin = async (context) => {
     log("==================== PLUGIN INITIALIZED ====================");
     log(`Directory: ${context.directory}`);
     log(`Worktree: ${context.worktree}`);
     log(`Project ID: ${context.project?.id}`);
+    // Get client for API calls
+    const client = context.client;
+    // Track last processed message to avoid duplicates
+    let lastProcessedMessageId = null;
+    let isProcessingIdle = false;
+    /**
+     * Handle session.idle - fetch full messages with content and send to API
+     */
+    async function handleSessionIdle(sessionId) {
+        if (isProcessingIdle) {
+            log("SESSION.IDLE: skipping - already processing");
+            return;
+        }
+        isProcessingIdle = true;
+        try {
+            log(`SESSION.IDLE: Processing ${sessionId}`);
+            if (!client) {
+                log("SESSION.IDLE: client is null");
+                return;
+            }
+            // Fetch messages from OpenCode API
+            const messagesResponse = await client.session.messages({
+                path: { id: sessionId },
+            });
+            const messages = messagesResponse.data ?? [];
+            log(`SESSION.IDLE: fetched ${messages.length} messages`);
+            // Find the last assistant message with content that we haven't processed
+            const lastAssistantMessage = [...messages]
+                .reverse()
+                .find((m) => {
+                if (m.info.role !== "assistant")
+                    return false;
+                const parts = m.parts;
+                return parts?.some(p => (p.type === "text" || p.type === "markdown") && (p.text || p.content));
+            });
+            if (!lastAssistantMessage) {
+                log("SESSION.IDLE: no assistant message with content found");
+                return;
+            }
+            const msgInfo = lastAssistantMessage.info;
+            if (msgInfo.id === lastProcessedMessageId) {
+                log(`SESSION.IDLE: message ${msgInfo.id} already processed`);
+                return;
+            }
+            lastProcessedMessageId = msgInfo.id;
+            // Extract text content from parts
+            const parts = lastAssistantMessage.parts;
+            const textContent = extractTextFromParts(parts);
+            log(`SESSION.IDLE: processing message ${msgInfo.id} with ${textContent.length} chars of content`);
+            // Update the message in database with content
+            // We use a PATCH/PUT endpoint or re-send with content
+            const request = {
+                messageId: msgInfo.id,
+                sessionId: msgInfo.sessionID,
+                role: 1, // Assistant
+                mode: modeToNumber(msgInfo.mode),
+                participantIdentifier: msgInfo.modelID,
+                providerName: msgInfo.providerID,
+                content: textContent || null,
+                tokensInput: msgInfo.tokens.input + msgInfo.tokens.cache.read,
+                tokensOutput: msgInfo.tokens.output,
+                cost: msgInfo.cost,
+                createdAt: epochToIso(msgInfo.time.created),
+                parentMessageId: msgInfo.parentID
+            };
+            await createMessage(request);
+            log(`SESSION.IDLE: message ${msgInfo.id} sent with content`);
+        }
+        catch (error) {
+            log(`SESSION.IDLE ERROR: ${error}`);
+        }
+        finally {
+            isProcessingIdle = false;
+        }
+    }
     return {
         // Generic event handler - catches ALL events
         event: async ({ event }) => {
@@ -225,18 +311,19 @@ export const OpenCodeApiClientPlugin = async (context) => {
                 case "session.created":
                     await handleSessionUpdated(properties);
                     break;
-                case "session.status":
-                    // Just log status changes
-                    const status = properties?.status?.type;
-                    if (status === "idle") {
-                        log(`SESSION.IDLE: ${properties?.sessionID}`);
+                case "session.idle":
+                    // This is the main event for processing completed messages with content
+                    const sessionId = properties?.sessionID;
+                    if (sessionId) {
+                        await handleSessionIdle(sessionId);
                     }
                     break;
                 case "message.updated":
+                    // Still process for metadata (tokens, cost) but without content
                     await handleMessageUpdated(properties);
                     break;
                 case "message.part.updated":
-                    // Log text message parts
+                    // Log text message parts for debugging
                     const part = properties?.part;
                     if (part?.type === "text") {
                         const text = part.text || "";
