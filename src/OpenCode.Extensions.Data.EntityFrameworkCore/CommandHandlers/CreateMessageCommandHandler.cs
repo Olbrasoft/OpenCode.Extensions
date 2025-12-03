@@ -27,6 +27,12 @@ public class CreateMessageCommandHandler : ICommandHandler<CreateMessageCommand,
         ArgumentNullException.ThrowIfNull(command);
         token.ThrowIfCancellationRequested();
 
+        // Content is required and cannot be empty
+        if (string.IsNullOrWhiteSpace(command.Content))
+        {
+            throw new ArgumentException("Message content cannot be null or empty.", nameof(command));
+        }
+
         // Get or create session by external session identifier
         var session = await _context.Sessions
             .FirstOrDefaultAsync(s => s.SessionId == command.SessionId, token);

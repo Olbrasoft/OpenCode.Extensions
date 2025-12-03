@@ -56,6 +56,11 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
             .HasForeignKey(m => m.ParticipantId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Content - required and cannot be empty
+        builder.Property(m => m.Content)
+            .IsRequired();
+        builder.ToTable(t => t.HasCheckConstraint("CK_Messages_Content_NotEmpty", "length(\"Content\") > 0"));
+
         // Cost column configuration
         builder.Property(m => m.Cost)
             .HasPrecision(18, 8);
