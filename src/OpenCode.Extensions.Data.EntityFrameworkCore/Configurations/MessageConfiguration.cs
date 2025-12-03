@@ -34,6 +34,13 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
             .HasForeignKey(m => m.ParentMessageId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Each session can have only ONE root message (message without parent)
+        // This is enforced by a unique partial index on SessionId where ParentMessageId IS NULL
+        builder.HasIndex(m => m.SessionId)
+            .HasFilter("\"ParentMessageId\" IS NULL")
+            .IsUnique()
+            .HasDatabaseName("IX_Messages_SessionId_RootMessage");
+
         // Role - enum stored as int (no FK, just conversion)
         builder.Property(m => m.Role)
             .HasConversion<int>();

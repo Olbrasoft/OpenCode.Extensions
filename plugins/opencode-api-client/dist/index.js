@@ -188,8 +188,18 @@ export const OpenCodeApiClientPlugin = async (context) => {
             });
             const messages = messagesResponse.data ?? [];
             log(`SESSION.IDLE: fetched ${messages.length} messages`);
+            // Sort messages by creation time to establish correct parent chain
+            const sortedMessages = [...messages].sort((a, b) => {
+                const timeA = a.info.time.created;
+                const timeB = b.info.time.created;
+                return timeA - timeB;
+            });
+            // Track the last processed message ID to build the chain
+            // User message -> parent is previous assistant (or null for first)
+            // Assistant message -> parent is the user message it responds to (from parentID)
+            let lastAssistantMessageId = null;
             // Process all messages that haven't been sent yet
-            for (const message of messages) {
+            for (const message of sortedMessages) {
                 const msgInfo = message.info;
                 // Skip if already processed
                 if (processedMessages.has(msgInfo.id)) {
@@ -208,6 +218,7 @@ export const OpenCodeApiClientPlugin = async (context) => {
                 let request;
                 if (msgInfo.role === "user") {
                     const userInfo = msgInfo;
+                    // User message: parent is the last assistant message (or null for first message in session)
                     request = {
                         messageId: userInfo.id,
                         sessionId: userInfo.sessionID,
@@ -220,11 +231,12 @@ export const OpenCodeApiClientPlugin = async (context) => {
                         tokensOutput: null,
                         cost: null,
                         createdAt: epochToIso(userInfo.time.created),
-                        parentMessageId: null
+                        parentMessageId: lastAssistantMessageId // null for first, or previous assistant's ID
                     };
                 }
                 else {
                     const assistantInfo = msgInfo;
+                    // Assistant message: parent is the user message it responds to (from OpenCode's parentID)
                     request = {
                         messageId: assistantInfo.id,
                         sessionId: assistantInfo.sessionID,
@@ -239,8 +251,10 @@ export const OpenCodeApiClientPlugin = async (context) => {
                         createdAt: epochToIso(assistantInfo.time.created),
                         parentMessageId: assistantInfo.parentID
                     };
+                    // Track this assistant message for the next user message's parent
+                    lastAssistantMessageId = assistantInfo.id;
                 }
-                log(`SESSION.IDLE: creating message ${msgInfo.id} (${msgInfo.role}) with ${textContent.length} chars`);
+                log(`SESSION.IDLE: creating message ${msgInfo.id} (${msgInfo.role}) with ${textContent.length} chars, parent: ${request.parentMessageId ?? 'null'}`);
                 await createMessage(request);
             }
             log(`SESSION.IDLE: done processing ${sessionId}`);
