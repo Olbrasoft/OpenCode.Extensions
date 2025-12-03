@@ -25,9 +25,9 @@ public class CreateMessageCommand : BaseCommand<int>
     public Role Role { get; init; }
 
     /// <summary>
-    /// Mode of operation (Build or Plan).
+    /// Mode of operation (Build or Plan). Nullable for user messages.
     /// </summary>
-    public Mode Mode { get; init; }
+    public Mode? Mode { get; init; }
 
     /// <summary>
     /// Identifier of the participant who created the message.

@@ -112,7 +112,7 @@ public record CreateMessageRequest(
     string MessageId,
     string SessionId,
     Role Role,
-    Mode Mode,
+    Mode? Mode,
     string ParticipantIdentifier,
     string ProviderName,
     string? Content,

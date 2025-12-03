@@ -40,6 +40,12 @@ function log(message) {
 function epochToIso(epochMs) {
     return new Date(epochMs).toISOString();
 }
+function isUserMessage(info) {
+    return info.role === "user";
+}
+function isAssistantMessage(info) {
+    return info.role === "assistant";
+}
 /**
  * Send session to our C# API (upsert - creates or updates)
  */
@@ -72,8 +78,45 @@ async function upsertSession(sessionId, title, directory, createdAt) {
         log(`API EXCEPTION: ${error}`);
     }
 }
-// Track processed sessions to avoid duplicate API calls
+// Track processed sessions and messages to avoid duplicate API calls
 const processedSessions = new Set();
+const processedMessages = new Set();
+/**
+ * Convert mode string to numeric value
+ */
+function modeToNumber(mode) {
+    switch (mode.toLowerCase()) {
+        case "build": return 1;
+        case "plan": return 2;
+        default: return null;
+    }
+}
+/**
+ * Send message to our C# API
+ */
+async function createMessage(request) {
+    try {
+        log(`API CALL: POST /api/messages - ${request.messageId} (${request.role === 0 ? "user" : "assistant"})`);
+        const response = await fetch(`${API_BASE_URL}/api/messages`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(request)
+        });
+        if (response.ok) {
+            const result = await response.json();
+            log(`API SUCCESS: Message created with internal ID ${result.id}`);
+        }
+        else {
+            const errorText = await response.text();
+            log(`API ERROR: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+    }
+    catch (error) {
+        log(`API EXCEPTION: ${error}`);
+    }
+}
 /**
  * Handle session.updated event
  */
@@ -96,6 +139,66 @@ async function handleSessionUpdated(properties) {
     setTimeout(() => processedSessions.delete(cacheKey), 5000);
     log(`SESSION.UPDATED: ${sessionId} - "${title}"`);
     await upsertSession(sessionId, title, directory, createdAt);
+}
+/**
+ * Handle message.updated event
+ */
+async function handleMessageUpdated(properties) {
+    const info = properties?.info;
+    if (!info?.id) {
+        return;
+    }
+    // Only process completed assistant messages or user messages
+    // Assistant messages should have completed time, user messages are always complete
+    if (isAssistantMessage(info) && !info.time.completed) {
+        // Assistant message still in progress - wait for completion
+        return;
+    }
+    // Avoid duplicate API calls
+    const cacheKey = `${info.id}:${info.time.created}`;
+    if (processedMessages.has(cacheKey)) {
+        return;
+    }
+    processedMessages.add(cacheKey);
+    // Clean up old entries after 30 seconds
+    setTimeout(() => processedMessages.delete(cacheKey), 30000);
+    log(`MESSAGE.UPDATED: ${info.id} (role: ${info.role})`);
+    // Build the request based on message type
+    let request;
+    if (isUserMessage(info)) {
+        request = {
+            messageId: info.id,
+            sessionId: info.sessionID,
+            role: 0, // User
+            mode: null, // User messages don't have mode
+            participantIdentifier: "user-jirka", // Will be resolved by API
+            providerName: "HumanInput",
+            content: null, // Content comes from parts, we'll need to collect it separately
+            tokensInput: null,
+            tokensOutput: null,
+            cost: null,
+            createdAt: epochToIso(info.time.created),
+            parentMessageId: null
+        };
+    }
+    else {
+        // Assistant message
+        request = {
+            messageId: info.id,
+            sessionId: info.sessionID,
+            role: 1, // Assistant
+            mode: modeToNumber(info.mode),
+            participantIdentifier: info.modelID, // e.g., "claude-sonnet-4-20250514"
+            providerName: info.providerID, // e.g., "anthropic"
+            content: null, // Content comes from parts
+            tokensInput: info.tokens.input + info.tokens.cache.read,
+            tokensOutput: info.tokens.output,
+            cost: info.cost,
+            createdAt: epochToIso(info.time.created),
+            parentMessageId: info.parentID
+        };
+    }
+    await createMessage(request);
 }
 log("================================================================================");
 log("==================== OPENCODE API CLIENT PLUGIN LOADED ========================");
@@ -130,11 +233,7 @@ export const OpenCodeApiClientPlugin = async (context) => {
                     }
                     break;
                 case "message.updated":
-                    // Log message updates (for future implementation)
-                    const msgInfo = properties?.info;
-                    if (msgInfo?.id) {
-                        log(`MESSAGE.UPDATED: ${msgInfo.id} (role: ${msgInfo.role})`);
-                    }
+                    await handleMessageUpdated(properties);
                     break;
                 case "message.part.updated":
                     // Log text message parts

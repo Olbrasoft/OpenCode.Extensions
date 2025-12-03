@@ -65,7 +65,7 @@ public class CreateMessageCommandHandlerTests
         Assert.Equal("Hello, World!", message.Content);
         Assert.Equal(Role.User, message.Role);
         Assert.Equal((int)Mode.Build, message.ModeId);
-        Assert.Equal("Jirka", message.Participant?.Label);
+        Assert.Equal("Jirka", message.Participant?.Label); // Uses existing seed data
         Assert.Equal("HumanInput", message.Provider?.Name);
     }
 
@@ -112,7 +112,7 @@ public class CreateMessageCommandHandlerTests
 
         Assert.NotNull(message);
         Assert.Equal(Role.Assistant, message.Role);
-        Assert.Equal("Claude Sonnet 4.5", message.Participant?.Label);
+        Assert.Equal("Claude Sonnet 4.5", message.Participant?.Label); // Uses existing seed data
         Assert.Equal("Anthropic", message.Provider?.Name);
         Assert.Equal(100, message.TokensInput);
         Assert.Equal(500, message.TokensOutput);
@@ -120,7 +120,7 @@ public class CreateMessageCommandHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_InvalidSession_ThrowsException()
+    public async Task HandleAsync_NonExistentSession_AutoCreatesSession()
     {
         // Arrange
         using var context = await CreateSqliteContextWithSeedData();
@@ -129,7 +129,7 @@ public class CreateMessageCommandHandlerTests
         var command = new CreateMessageCommand
         {
             MessageId = "msg-001",
-            SessionId = "non-existent-session",
+            SessionId = "auto-created-session",
             Role = Role.User,
             Mode = Mode.Build,
             ParticipantIdentifier = "user-jirka",
@@ -138,15 +138,19 @@ public class CreateMessageCommandHandlerTests
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => handler.HandleAsync(command, CancellationToken.None));
+        // Act
+        var result = await handler.HandleAsync(command, CancellationToken.None);
 
-        Assert.Contains("Session with ID 'non-existent-session' not found", exception.Message);
+        // Assert
+        Assert.True(result > 0);
+        
+        // Verify session was auto-created
+        var session = await context.Sessions.FirstOrDefaultAsync(s => s.SessionId == "auto-created-session");
+        Assert.NotNull(session);
     }
 
     [Fact]
-    public async Task HandleAsync_InvalidParticipant_ThrowsException()
+    public async Task HandleAsync_NonExistentParticipant_AutoCreatesParticipant()
     {
         // Arrange
         using var context = await CreateSqliteContextWithSeedData();
@@ -164,19 +168,24 @@ public class CreateMessageCommandHandlerTests
         {
             MessageId = "msg-001",
             SessionId = "test-session",
-            Role = Role.User,
+            Role = Role.Assistant,
             Mode = Mode.Build,
-            ParticipantIdentifier = "unknown-participant",
-            ProviderName = "HumanInput",
+            ParticipantIdentifier = "new-ai-model-2025",
+            ProviderName = "Anthropic",
             Content = "Test",
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => handler.HandleAsync(command, CancellationToken.None));
+        // Act
+        var result = await handler.HandleAsync(command, CancellationToken.None);
 
-        Assert.Contains("Participant with identifier 'unknown-participant' not found", exception.Message);
+        // Assert
+        Assert.True(result > 0);
+        
+        // Verify participant was auto-created as AI (ParticipantTypeId = 2 for AiModel)
+        var participant = await context.Participants.FirstOrDefaultAsync(p => p.Identifier == "new-ai-model-2025");
+        Assert.NotNull(participant);
+        Assert.Equal(2, participant.ParticipantTypeId); // 2 = AiModel
     }
 
     [Fact]
@@ -210,7 +219,8 @@ public class CreateMessageCommandHandlerTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => handler.HandleAsync(command, CancellationToken.None));
 
-        Assert.Contains("Provider with name 'UnknownProvider' not found", exception.Message);
+        Assert.Contains("UnknownProvider", exception.Message);
+        Assert.Contains("not found", exception.Message);
     }
 
     [Fact]
