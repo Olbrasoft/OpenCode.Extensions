@@ -38,7 +38,9 @@ public class LegacyMonologConfiguration : IEntityTypeConfiguration<LegacyMonolog
         builder.Property(m => m.ModeName)
             .HasMaxLength(50);
 
-        // Vector embedding handled by Pgvector.EntityFrameworkCore
+        // Vector embedding - explicitly configure to avoid constructor binding issues
+        builder.Property(m => m.Embedding)
+            .HasColumnType("vector(1536)");
 
         // Cost precision
         builder.Property(m => m.Cost)

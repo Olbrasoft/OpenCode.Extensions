@@ -18,7 +18,7 @@ public interface IMonologService
         Role role,
         string firstMessageId,
         string content,
-        Guid participantId,
+        int participantId,
         int providerId,
         int modeId,
         DateTimeOffset startedAt,

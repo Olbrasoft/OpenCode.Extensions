@@ -57,7 +57,9 @@ public class MonologConfiguration : IEntityTypeConfiguration<Monolog>
         builder.Property(m => m.Content)
             .IsRequired();
 
-        // Vector embedding handled by Pgvector.EntityFrameworkCore
+        // Vector embedding - explicitly configure to avoid constructor binding issues
+        builder.Property(m => m.Embedding)
+            .HasColumnType("vector(1536)");
 
         // Cost precision
         builder.Property(m => m.Cost)

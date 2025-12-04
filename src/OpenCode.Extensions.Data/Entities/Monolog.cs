@@ -75,7 +75,7 @@ public class Monolog
     /// Participant ID - who created this monolog (foreign key).
     /// REQUIRED - we always know WHO is communicating.
     /// </summary>
-    public Guid ParticipantId { get; set; }
+    public int ParticipantId { get; set; }
 
     /// <summary>
     /// Navigation property to Participant.

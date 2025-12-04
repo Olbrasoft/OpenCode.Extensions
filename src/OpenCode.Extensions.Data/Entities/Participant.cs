@@ -9,9 +9,9 @@ namespace Olbrasoft.OpenCode.Extensions.Data.Entities;
 public class Participant
 {
     /// <summary>
-    /// Unique identifier.
+    /// Unique identifier (auto-increment).
     /// </summary>
-    public Guid Id { get; set; }
+    public int Id { get; set; }
 
     /// <summary>
     /// Human-readable label (e.g., "Jirka", "Claude Sonnet 4", "Deploy Bot").

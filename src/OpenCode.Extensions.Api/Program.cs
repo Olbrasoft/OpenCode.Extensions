@@ -3,15 +3,17 @@ using Olbrasoft.Mediation;
 using Olbrasoft.OpenCode.Extensions.Data.EntityFrameworkCore;
 using Olbrasoft.OpenCode.Extensions.Data.Enums;
 using OpenCode.Extensions.Services;
+using Pgvector.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure services
 builder.Services.AddOpenApi();
 
-// Add DbContext with PostgreSQL
+// Add DbContext with PostgreSQL and pgvector
 builder.Services.AddDbContext<OpenCodeDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
+        npgsqlOptions => npgsqlOptions.UseVector()));
 
 // Add Mediation with handlers from EF Core assembly
 builder.Services
@@ -194,7 +196,7 @@ public record CreateMonologRequest(
     int Role,
     string FirstMessageId,
     string? Content,
-    Guid ParticipantId,
+    int ParticipantId,
     int ProviderId,
     int ModeId,
     DateTimeOffset StartedAt);
@@ -242,7 +244,7 @@ public record MonologResponse
     public string FirstMessageId { get; init; } = string.Empty;
     public string? LastMessageId { get; init; }
     public string Content { get; init; } = string.Empty;
-    public Guid ParticipantId { get; init; }
+    public int ParticipantId { get; init; }
     public int ProviderId { get; init; }
     public int ModeId { get; init; }
     public int? TokensInput { get; init; }

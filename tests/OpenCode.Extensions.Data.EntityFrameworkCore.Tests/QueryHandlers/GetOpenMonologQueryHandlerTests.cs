@@ -22,7 +22,7 @@ public class GetOpenMonologQueryHandlerTests
     {
         var participant = new Participant
         {
-            Id = Guid.NewGuid(),
+            Id = 100,
             Label = "TestUser",
             Identifier = "test-user",
             Type = ParticipantType.Human

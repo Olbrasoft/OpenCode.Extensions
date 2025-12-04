@@ -39,7 +39,7 @@ public class CreateMonologCommand : BaseCommand<int>
     /// <summary>
     /// Participant ID - who created this monolog.
     /// </summary>
-    public required Guid ParticipantId { get; init; }
+    public required int ParticipantId { get; init; }
 
     /// <summary>
     /// Provider ID - where the message came from.
