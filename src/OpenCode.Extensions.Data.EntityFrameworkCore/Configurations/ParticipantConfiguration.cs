@@ -18,8 +18,9 @@ public class ParticipantConfiguration : IEntityTypeConfiguration<Participant>
             .HasMaxLength(200)
             .IsRequired();
 
-        // Enum → int conversion
+        // Enum → int conversion with column name mapping
         builder.Property(p => p.Type)
+            .HasColumnName("ParticipantTypeId")
             .HasConversion<int>();
 
         builder.HasIndex(p => p.Identifier)

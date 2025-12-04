@@ -1,7 +1,12 @@
 /**
- * OpenCode API Client Plugin
+ * OpenCode API Client Plugin v3 - Monolog Support
  *
- * Plugin that connects OpenCode to our custom C# API for session and message logging.
+ * Plugin that connects OpenCode to our C# API for session and monolog logging.
+ *
+ * Monolog = continuous speech by one participant until the other speaks.
+ * - User messages without assistant response are joined into one monolog
+ * - Assistant streaming responses form one monolog
+ * - Monolog is closed when the other participant speaks
  *
  * API Endpoint: http://localhost:5100
  *
@@ -13,6 +18,14 @@ import { appendFileSync, mkdirSync, existsSync } from "fs";
 const API_BASE_URL = "http://localhost:5100";
 const LOG_DIR = "/tmp/opencode-plugin-logs";
 const LOG_FILE = `${LOG_DIR}/api-client.log`;
+// Constants
+const ROLE_USER = 1;
+const ROLE_ASSISTANT = 2;
+const DEFAULT_PARTICIPANT_ID = "00000000-0000-0000-0000-000000000001"; // Default user
+const DEFAULT_PROVIDER_ID = 1; // OpenCode
+const DEFAULT_MODE_ID = 1; // Build
+// Current monolog states by session
+const sessionStates = new Map();
 // Ensure log directory exists
 if (!existsSync(LOG_DIR)) {
     try {
@@ -41,9 +54,22 @@ function epochToIso(epochMs) {
     return new Date(epochMs).toISOString();
 }
 /**
- * Send session to our C# API (upsert - creates or updates)
+ * Get or initialize session state
  */
-async function upsertSession(sessionId, title, directory, createdAt) {
+function getSessionState(sessionId) {
+    if (!sessionStates.has(sessionId)) {
+        sessionStates.set(sessionId, {
+            userMonolog: null,
+            assistantMonolog: null,
+            dbSessionId: null
+        });
+    }
+    return sessionStates.get(sessionId);
+}
+/**
+ * API: Upsert session
+ */
+async function apiUpsertSession(sessionId, title, directory, createdAt) {
     try {
         const payload = {
             sessionId,
@@ -51,25 +77,150 @@ async function upsertSession(sessionId, title, directory, createdAt) {
             workingDirectory: directory,
             createdAt: epochToIso(createdAt)
         };
-        log(`API CALL: POST /api/sessions - ${sessionId}`);
+        log(`API: POST /api/sessions - ${sessionId}`);
         const response = await fetch(`${API_BASE_URL}/api/sessions`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
         if (response.ok) {
             const result = await response.json();
-            log(`API SUCCESS: Session upserted with internal ID ${result.id}`);
+            log(`API: Session upserted, DB ID: ${result.id}`);
+            return result.id;
         }
         else {
             const errorText = await response.text();
-            log(`API ERROR: ${response.status} ${response.statusText} - ${errorText}`);
+            log(`API ERROR: ${response.status} - ${errorText}`);
+            return null;
         }
     }
     catch (error) {
         log(`API EXCEPTION: ${error}`);
+        return null;
+    }
+}
+/**
+ * API: Get open monolog
+ */
+async function apiGetOpenMonolog(dbSessionId, role) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/monologs/open?sessionId=${dbSessionId}&role=${role}`);
+        if (response.ok) {
+            const result = await response.json();
+            return result;
+        }
+        return null;
+    }
+    catch (error) {
+        log(`API EXCEPTION (getOpenMonolog): ${error}`);
+        return null;
+    }
+}
+/**
+ * API: Create monolog
+ */
+async function apiCreateMonolog(dbSessionId, parentMonologId, role, firstMessageId, content, startedAt) {
+    try {
+        const payload = {
+            sessionId: dbSessionId,
+            parentMonologId,
+            role,
+            firstMessageId,
+            content,
+            participantId: DEFAULT_PARTICIPANT_ID,
+            providerId: DEFAULT_PROVIDER_ID,
+            modeId: DEFAULT_MODE_ID,
+            startedAt: epochToIso(startedAt)
+        };
+        log(`API: POST /api/monologs - role: ${role}, content: "${content.substring(0, 50)}..."`);
+        const response = await fetch(`${API_BASE_URL}/api/monologs`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+            const result = await response.json();
+            log(`API: Monolog created, ID: ${result.id}`);
+            return result.id;
+        }
+        else {
+            const errorText = await response.text();
+            log(`API ERROR (createMonolog): ${response.status} - ${errorText}`);
+            return null;
+        }
+    }
+    catch (error) {
+        log(`API EXCEPTION (createMonolog): ${error}`);
+        return null;
+    }
+}
+/**
+ * API: Append content to monolog
+ */
+async function apiAppendContent(monologId, content) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/monologs/${monologId}/append`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content })
+        });
+        return response.ok;
+    }
+    catch (error) {
+        log(`API EXCEPTION (appendContent): ${error}`);
+        return false;
+    }
+}
+/**
+ * API: Update content of monolog
+ */
+async function apiUpdateContent(monologId, content) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/monologs/${monologId}/content`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content })
+        });
+        return response.ok;
+    }
+    catch (error) {
+        log(`API EXCEPTION (updateContent): ${error}`);
+        return false;
+    }
+}
+/**
+ * API: Close monolog
+ */
+async function apiCloseMonolog(monologId, lastMessageId, finalContent, completedAt, isAborted, tokensInput = null, tokensOutput = null, cost = null) {
+    try {
+        const payload = {
+            lastMessageId,
+            finalContent,
+            completedAt: epochToIso(completedAt),
+            isAborted,
+            tokensInput,
+            tokensOutput,
+            cost
+        };
+        log(`API: PUT /api/monologs/${monologId}/close - aborted: ${isAborted}`);
+        const response = await fetch(`${API_BASE_URL}/api/monologs/${monologId}/close`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+            log(`API: Monolog ${monologId} closed`);
+            return true;
+        }
+        else {
+            const errorText = await response.text();
+            log(`API ERROR (closeMonolog): ${response.status} - ${errorText}`);
+            return false;
+        }
+    }
+    catch (error) {
+        log(`API EXCEPTION (closeMonolog): ${error}`);
+        return false;
     }
 }
 // Track processed sessions to avoid duplicate API calls
@@ -79,72 +230,171 @@ const processedSessions = new Set();
  */
 async function handleSessionUpdated(properties) {
     const info = properties?.info;
-    if (!info?.id) {
+    if (!info?.id)
         return;
-    }
     const sessionId = info.id;
     const title = info.title || null;
     const directory = info.directory || null;
     const createdAt = info.time?.created || Date.now();
-    // Avoid duplicate calls for the same session in quick succession
+    // Avoid duplicate calls
     const cacheKey = `${sessionId}:${title}`;
-    if (processedSessions.has(cacheKey)) {
+    if (processedSessions.has(cacheKey))
         return;
-    }
     processedSessions.add(cacheKey);
-    // Clean up old entries after 5 seconds
     setTimeout(() => processedSessions.delete(cacheKey), 5000);
     log(`SESSION.UPDATED: ${sessionId} - "${title}"`);
-    await upsertSession(sessionId, title, directory, createdAt);
+    const dbSessionId = await apiUpsertSession(sessionId, title, directory, createdAt);
+    if (dbSessionId) {
+        const state = getSessionState(sessionId);
+        state.dbSessionId = dbSessionId;
+    }
+}
+/**
+ * Handle message.updated event
+ * This is called when a message is created or updated (final state)
+ */
+async function handleMessageUpdated(properties, sessionId) {
+    const info = properties?.info;
+    if (!info?.id)
+        return;
+    const messageId = info.id;
+    const role = info.role;
+    const text = (info.parts || [])
+        .filter(p => p.type === "text")
+        .map(p => p.text)
+        .join("\n");
+    const state = getSessionState(sessionId);
+    if (!state.dbSessionId) {
+        log(`WARN: No DB session ID for ${sessionId}`);
+        return;
+    }
+    const now = Date.now();
+    if (role === "user") {
+        // User message - check if we need to close assistant monolog first
+        if (state.assistantMonolog?.monologId) {
+            await apiCloseMonolog(state.assistantMonolog.monologId, state.assistantMonolog.firstMessageId, state.assistantMonolog.content, now, false);
+            state.assistantMonolog = null;
+        }
+        // Check for existing open user monolog
+        if (state.userMonolog?.monologId) {
+            // Append to existing user monolog (no-reply scenario)
+            await apiAppendContent(state.userMonolog.monologId, text);
+            state.userMonolog.content += "\n\n" + text;
+            log(`MONOLOG: Appended to user monolog ${state.userMonolog.monologId}`);
+        }
+        else {
+            // Create new user monolog
+            const parentId = state.assistantMonolog?.monologId || null;
+            const monologId = await apiCreateMonolog(state.dbSessionId, parentId, ROLE_USER, messageId, text, now);
+            if (monologId) {
+                state.userMonolog = {
+                    monologId,
+                    role: ROLE_USER,
+                    content: text,
+                    firstMessageId: messageId
+                };
+                log(`MONOLOG: Created user monolog ${monologId}`);
+            }
+        }
+    }
+    else if (role === "assistant") {
+        // Assistant message - close user monolog first
+        if (state.userMonolog?.monologId) {
+            await apiCloseMonolog(state.userMonolog.monologId, state.userMonolog.firstMessageId, state.userMonolog.content, now, false);
+            const closedUserMonologId = state.userMonolog.monologId;
+            state.userMonolog = null;
+            // Create assistant monolog with user as parent
+            const monologId = await apiCreateMonolog(state.dbSessionId, closedUserMonologId, ROLE_ASSISTANT, messageId, text, now);
+            if (monologId) {
+                state.assistantMonolog = {
+                    monologId,
+                    role: ROLE_ASSISTANT,
+                    content: text,
+                    firstMessageId: messageId
+                };
+                log(`MONOLOG: Created assistant monolog ${monologId}`);
+            }
+        }
+        else if (state.assistantMonolog?.monologId) {
+            // Update existing assistant monolog (streaming complete)
+            await apiUpdateContent(state.assistantMonolog.monologId, text);
+            state.assistantMonolog.content = text;
+            log(`MONOLOG: Updated assistant monolog ${state.assistantMonolog.monologId}`);
+        }
+    }
+}
+/**
+ * Handle message.part.updated event (streaming)
+ */
+async function handleMessagePartUpdated(properties, sessionId) {
+    const part = properties?.part;
+    if (part?.type !== "text")
+        return;
+    const text = part.text || "";
+    if (text.length === 0)
+        return;
+    const state = getSessionState(sessionId);
+    // Update assistant content during streaming
+    if (state.assistantMonolog?.monologId) {
+        // Throttle updates - only update every 500ms worth of text or 100 chars
+        const contentDiff = text.length - state.assistantMonolog.content.length;
+        if (contentDiff > 100) {
+            await apiUpdateContent(state.assistantMonolog.monologId, text);
+            state.assistantMonolog.content = text;
+        }
+    }
+}
+/**
+ * Handle session becoming idle (all monologs should be closed)
+ */
+async function handleSessionIdle(sessionId) {
+    const state = getSessionState(sessionId);
+    const now = Date.now();
+    if (state.userMonolog?.monologId) {
+        await apiCloseMonolog(state.userMonolog.monologId, state.userMonolog.firstMessageId, state.userMonolog.content, now, false);
+        state.userMonolog = null;
+    }
+    if (state.assistantMonolog?.monologId) {
+        await apiCloseMonolog(state.assistantMonolog.monologId, state.assistantMonolog.firstMessageId, state.assistantMonolog.content, now, false);
+        state.assistantMonolog = null;
+    }
 }
 log("================================================================================");
-log("==================== OPENCODE API CLIENT PLUGIN LOADED ========================");
+log("==================== OPENCODE API CLIENT PLUGIN v3 (MONOLOGS) =================");
 log(`==================== API: ${API_BASE_URL} ======================================`);
 log("================================================================================");
 /**
- * OpenCode API Client Plugin
- *
- * Uses generic event handler to catch all events and route them appropriately.
+ * OpenCode API Client Plugin v3
  */
 export const OpenCodeApiClientPlugin = async (context) => {
     log("==================== PLUGIN INITIALIZED ====================");
     log(`Directory: ${context.directory}`);
-    log(`Worktree: ${context.worktree}`);
-    log(`Project ID: ${context.project?.id}`);
     return {
-        // Generic event handler - catches ALL events
+        // Generic event handler
         event: async ({ event }) => {
             const eventType = event?.type;
             const properties = event?.properties;
-            // Route events to appropriate handlers
+            const sessionId = properties?.sessionID || "";
             switch (eventType) {
                 case "session.updated":
                 case "session.created":
                     await handleSessionUpdated(properties);
                     break;
                 case "session.status":
-                    // Just log status changes
                     const status = properties?.status?.type;
-                    if (status === "idle") {
-                        log(`SESSION.IDLE: ${properties?.sessionID}`);
+                    if (status === "idle" && sessionId) {
+                        log(`SESSION.IDLE: ${sessionId}`);
+                        await handleSessionIdle(sessionId);
                     }
                     break;
                 case "message.updated":
-                    // Log message updates (for future implementation)
-                    const msgInfo = properties?.info;
-                    if (msgInfo?.id) {
-                        log(`MESSAGE.UPDATED: ${msgInfo.id} (role: ${msgInfo.role})`);
+                    if (sessionId) {
+                        await handleMessageUpdated(properties, sessionId);
                     }
                     break;
                 case "message.part.updated":
-                    // Log text message parts
-                    const part = properties?.part;
-                    if (part?.type === "text") {
-                        const text = part.text || "";
-                        if (text.length > 0) {
-                            const preview = text.length > 50 ? text.substring(0, 50) + "..." : text;
-                            log(`MESSAGE.TEXT: "${preview}"`);
-                        }
+                    if (sessionId) {
+                        await handleMessagePartUpdated(properties, sessionId);
                     }
                     break;
                 // Ignore noisy events
@@ -153,22 +403,13 @@ export const OpenCodeApiClientPlugin = async (context) => {
                 case "tool.execute.after":
                     break;
                 default:
-                    // Log unknown events for debugging
                     if (eventType && !eventType.startsWith("message.part")) {
                         log(`EVENT: ${eventType}`);
                     }
                     break;
             }
         },
-        // Keep specific handlers for tool events (these work differently)
-        "tool.execute.before": async ({ tool, sessionID }) => {
-            log(`TOOL.BEFORE: ${tool}`);
-        },
-        "tool.execute.after": async ({ tool, sessionID }) => {
-            log(`TOOL.AFTER: ${tool}`);
-        },
     };
 };
-// Default export
 export default OpenCodeApiClientPlugin;
 //# sourceMappingURL=index.js.map

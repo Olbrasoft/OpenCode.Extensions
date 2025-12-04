@@ -25,4 +25,9 @@ public class Provider
     /// Messages received through this provider.
     /// </summary>
     public ICollection<Message> Messages { get; set; } = [];
+
+    /// <summary>
+    /// Monologs received through this provider.
+    /// </summary>
+    public ICollection<Monolog> Monologs { get; set; } = [];
 }

@@ -35,7 +35,7 @@ public class Message
     /// <summary>
     /// Participant who created/sent this message.
     /// </summary>
-    public Guid ParticipantId { get; set; }
+    public int ParticipantId { get; set; }
 
     /// <summary>
     /// Navigation property to Participant.

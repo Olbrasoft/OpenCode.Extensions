@@ -48,7 +48,7 @@ public class OpenCodeDbContextTests
 
         var participant = new Participant
         {
-            Id = Guid.NewGuid(),
+            Id = 100,
             Label = "Jirka",
             Identifier = "user-jirka",
             Type = ParticipantType.Human
